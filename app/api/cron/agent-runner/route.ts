@@ -23,16 +23,16 @@ import { aiConfig } from '@/lib/ai/client';
 
 interface AgentTask {
     id: string;
-    type: 'linkedin' | 'twitter' | 'github' | 'web';
+    type: 'jobSearch' | 'twitter' | 'github' | 'web';
     prompt: string;
     notifyOn: 'success' | 'failure' | 'always' | 'never';
 }
 
 const defaultTasks: AgentTask[] = [
     {
-        id: 'linkedin-morning',
-        type: 'linkedin',
-        prompt: 'Search LinkedIn for HR posts hiring 2026 passouts and SDE openings. Look for internships and full-time opportunities.',
+        id: 'ai-job-search-morning',
+        type: 'jobSearch',
+        prompt: 'Find the best SDE jobs and internships for 2026 passouts with good PPO opportunities and competitive compensation (minimum ₹50,000/month). Focus on roles matching Python, JavaScript, React, AWS, Docker, Kubernetes, ML/AI skills. Provide match scores and direct application links.',
         notifyOn: 'success'
     },
     {

@@ -2,7 +2,7 @@
 
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from "ai";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Conversation,
   ConversationContent,
@@ -18,13 +18,102 @@ import { Response } from "@/components/ai-elements/response";
 import { Tool, ToolHeader, ToolContent, ToolOutput } from "@/components/ai-elements/tool";
 
 export default function Home() {
-  const { messages, sendMessage, status, error } = useChat({
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [input, setInput] = useState('');
+  const [savedMessageIds, setSavedMessageIds] = useState<Set<string>>(new Set());
+
+  const { messages, sendMessage, status, error, stop } = useChat({
     transport: new DefaultChatTransport({
       api: '/api/agent',
     }),
   });
 
-  const [input, setInput] = useState('');
+  // Create conversation on mount
+  useEffect(() => {
+    const createConversation = async () => {
+      try {
+        const res = await fetch('/api/conversations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: `Chat ${new Date().toLocaleString()}` }),
+        });
+        const data = await res.json();
+        if (data.conversation?.id) {
+          setConversationId(data.conversation.id);
+          console.log('✅ Conversation created:', data.conversation.id);
+        }
+      } catch (error) {
+        console.error('❌ Failed to create conversation:', error);
+      }
+    };
+    createConversation();
+  }, []);
+
+  // Save messages ONLY when streaming is complete (status is 'ready')
+  useEffect(() => {
+    // Wait for conversation to be created AND streaming to finish
+    if (!conversationId || messages.length === 0 || status !== 'ready') {
+      if (!conversationId && messages.length > 0) {
+        console.log('⏳ Waiting for conversation to be created before saving...');
+      }
+      return;
+    }
+
+    const saveNewMessages = async () => {
+      // Only process messages that haven't been saved yet
+      const newMessages = messages.filter(msg => !savedMessageIds.has(msg.id));
+      
+      if (newMessages.length === 0) return;
+      
+      console.log(`💾 Stream complete! Saving ${newMessages.length} messages...`);
+
+      for (const message of newMessages) {
+        // Extract text content
+        const textParts = message.parts.filter(p => p.type === 'text');
+        const content = textParts.map(p => (p as any).text).join('\n');
+        
+        // Skip empty messages (intermediate states)
+        if (!content || content.trim() === '') {
+          console.log(`⏭️ Skipping empty message: ${message.id}`);
+          continue;
+        }
+        
+        // Extract tool calls and results
+        const toolParts = message.parts.filter(p => p.type.startsWith('tool-'));
+        const toolCalls = toolParts.length > 0 ? JSON.stringify(toolParts) : null;
+        
+        try {
+          const res = await fetch('/api/messages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              conversationId,
+              role: message.role,
+              content: content,
+              toolCalls,
+              toolResults: null,
+            }),
+          });
+
+          if (res.ok) {
+            setSavedMessageIds(prev => {
+              const newSet = new Set(prev);
+              newSet.add(message.id);
+              return newSet;
+            });
+            console.log(`✅ Complete message saved: ${message.id.substring(0, 8)}... (${content.length} chars)`);
+          } else {
+            const error = await res.json();
+            console.error('❌ Failed to save message:', error);
+          }
+        } catch (error) {
+          console.error('❌ Error saving message:', error);
+        }
+      }
+    };
+
+    saveNewMessages();
+  }, [status, messages, conversationId]);
 
   const handleSubmit = (message: { text?: string; files?: any[] }, e: React.FormEvent) => {
     e.preventDefault();
@@ -104,9 +193,17 @@ export default function Home() {
             {status === 'submitted' && (
               <Message from="assistant">
                 <MessageContent>
-                  <div className="flex items-center space-x-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
-                    <span className="text-gray-600 dark:text-gray-400">Thinking...</span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
+                      <span className="text-gray-600 dark:text-gray-400">Thinking...</span>
+                    </div>
+                    <button
+                      onClick={() => stop()}
+                      className="px-3 py-1 bg-red-500 text-white text-sm rounded hover:bg-red-600 transition-colors"
+                    >
+                      Stop
+                    </button>
                   </div>
                 </MessageContent>
               </Message>
