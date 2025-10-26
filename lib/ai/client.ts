@@ -1,7 +1,8 @@
 import { anthropic } from "@ai-sdk/anthropic"
 import { ANTHROPIC_MODEL } from "../config";
 import { tavily } from "@tavily/core";
-
+import { openai } from "@ai-sdk/openai";
+import { OPENAI_MODEL } from "../config";
 // Create the model instance using the new AI SDK 6 Beta pattern
 export const anthropicClient = anthropic(ANTHROPIC_MODEL);
 
@@ -13,3 +14,5 @@ export const aiConfig = {
 
 // Initialize Tavily search client
 export const tvly = tavily({ apiKey: process.env.TAVILY_API_KEY! });
+
+export const openaiClient = openai(OPENAI_MODEL);

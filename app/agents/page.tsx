@@ -1,402 +1,519 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Play, Pause, Settings, Bell, Clock, CheckCircle, XCircle, TrendingUp } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Play, Pause, Settings, Trash2, Plus, Clock, Activity, CheckCircle2, XCircle } from 'lucide-react';
 
-interface AgentConfig {
+interface Agent {
     id: string;
+    agentId: string;
     name: string;
     description: string;
     icon: string;
     category: string;
-    status: 'active' | 'paused' | 'running' | 'error';
+    status: 'active' | 'paused' | 'error';
     schedule: string;
-    lastRun?: Date;
-    nextRun?: Date;
-    successRate: number;
-    totalRuns: number;
-}
-
-interface AgentRun {
-    id: string;
-    agentId: string;
-    status: 'success' | 'error' | 'running';
-    timestamp: Date;
-    duration?: number;
-    result?: any;
-    error?: string;
+    createdAt: string;
+    updatedAt: string;
+    envVars?: any;
+    runs?: any[];
 }
 
 export default function AgentsPage() {
-    const [agents, setAgents] = useState<AgentConfig[]>([
-        {
-            id: 'linkedin-job-hunter',
-            name: 'LinkedIn Job Hunter',
-            description: 'Automatically searches LinkedIn for HR posts and job opportunities for 2026 passouts',
-            icon: '💼',
-            category: 'Job Search',
-            status: 'active',
-            schedule: '0 9,17 * * *', // 9 AM and 5 PM daily
-            lastRun: new Date(Date.now() - 3600000),
-            nextRun: new Date(Date.now() + 28800000),
-            successRate: 92,
-            totalRuns: 45
-        },
-        {
-            id: 'twitter-tech-poster',
-            name: 'Twitter Tech Poster',
-            description: 'Posts tweets about latest tech trends, coding tips, and DevOps insights',
-            icon: '🐦',
-            category: 'Social Media',
-            status: 'active',
-            schedule: '0 8,14,20 * * *', // 8 AM, 2 PM, 8 PM daily
-            lastRun: new Date(Date.now() - 7200000),
-            nextRun: new Date(Date.now() + 21600000),
-            successRate: 98,
-            totalRuns: 127
-        },
-        {
-            id: 'github-trending',
-            name: 'GitHub Trending Tracker',
-            description: 'Monitors trending repositories and notifies about relevant projects',
-            icon: '⭐',
-            category: 'Development',
-            status: 'paused',
-            schedule: '0 10 * * *', // 10 AM daily
-            lastRun: new Date(Date.now() - 86400000),
-            successRate: 100,
-            totalRuns: 23
-        },
-        {
-            id: 'web-research',
-            name: 'Tech News Aggregator',
-            description: 'Searches for latest tech news and compiles a daily digest',
-            icon: '📰',
-            category: 'Research',
-            status: 'active',
-            schedule: '0 7 * * *', // 7 AM daily
-            lastRun: new Date(Date.now() - 14400000),
-            nextRun: new Date(Date.now() + 25200000),
-            successRate: 95,
-            totalRuns: 31
+    const router = useRouter();
+    const [agents, setAgents] = useState<Agent[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [actionLoading, setActionLoading] = useState<string | null>(null);
+    const [showCreateModal, setShowCreateModal] = useState(false);
+
+    useEffect(() => {
+        fetchAgents();
+    }, []);
+
+    const fetchAgents = async () => {
+        try {
+            const res = await fetch('/api/agents');
+            const data = await res.json();
+            setAgents(data.agents || []);
+        } catch (error) {
+            console.error('Failed to fetch agents:', error);
+        } finally {
+            setLoading(false);
         }
-    ]);
-
-    const [selectedAgent, setSelectedAgent] = useState<AgentConfig | null>(null);
-    const [runs, setRuns] = useState<AgentRun[]>([]);
-    const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-
-    const handleToggleAgent = (agentId: string) => {
-        setAgents(agents.map(agent => 
-            agent.id === agentId 
-                ? { ...agent, status: agent.status === 'active' ? 'paused' : 'active' }
-                : agent
-        ));
     };
 
-    const handleRunNow = async (agentId: string) => {
-        // Set agent to running state
-        setAgents(agents.map(agent => 
-            agent.id === agentId 
-                ? { ...agent, status: 'running' }
-                : agent
-        ));
-
+    const toggleAgentStatus = async (agentId: string, currentStatus: string) => {
+        setActionLoading(agentId);
         try {
-            console.log(`🚀 Running agent: ${agentId}`);
-            
-            // Call the API to run the agent
-            const response = await fetch('/api/agents/run', {
+            const newStatus = currentStatus === 'active' ? 'paused' : 'active';
+            const res = await fetch(`/api/agents/${agentId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: newStatus }),
+            });
+
+            if (res.ok) {
+                await fetchAgents();
+            }
+        } catch (error) {
+            console.error('Failed to toggle agent:', error);
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
+    const runAgentNow = async (agentId: string) => {
+        setActionLoading(agentId);
+        try {
+            const res = await fetch('/api/agents/run', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ agentId }),
             });
 
-            const result = await response.json();
-            
-            console.log(`✅ Agent ${agentId} completed:`, result);
-
-            // Update agent with success status
-            setAgents(agents.map(agent => 
-                agent.id === agentId 
-                    ? { 
-                        ...agent, 
-                        status: result.success ? 'active' : 'error', 
-                        lastRun: new Date(),
-                        totalRuns: agent.totalRuns + 1,
-                        successRate: result.success 
-                            ? Math.round((agent.successRate * agent.totalRuns + 100) / (agent.totalRuns + 1))
-                            : Math.round((agent.successRate * agent.totalRuns) / (agent.totalRuns + 1))
-                    }
-                    : agent
-            ));
-
-            // Show a toast notification (you can add a toast library)
-            alert(result.success 
-                ? `✅ Agent ran successfully!\n\n${result.response?.substring(0, 200)}...` 
-                : `❌ Agent failed: ${result.error}`
-            );
-
+            if (res.ok) {
+                alert('Agent is running! Check the detail page for results.');
+            }
         } catch (error) {
-            console.error(`❌ Failed to run agent ${agentId}:`, error);
-            
-            // Update agent with error status
-            setAgents(agents.map(agent => 
-                agent.id === agentId 
-                    ? { ...agent, status: 'error' }
-                    : agent
-            ));
-
-            alert(`❌ Failed to run agent: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            console.error('Failed to run agent:', error);
+        } finally {
+            setActionLoading(null);
         }
     };
 
-    const formatNextRun = (date?: Date) => {
-        if (!date) return 'Not scheduled';
-        const diff = date.getTime() - Date.now();
-        const hours = Math.floor(diff / 3600000);
-        const minutes = Math.floor((diff % 3600000) / 60000);
-        
-        if (hours > 24) {
-            return `in ${Math.floor(hours / 24)} days`;
-        } else if (hours > 0) {
-            return `in ${hours}h ${minutes}m`;
-        } else {
-            return `in ${minutes}m`;
+    const deleteAgent = async (agentId: string) => {
+        if (!confirm('Are you sure you want to delete this agent?')) return;
+
+        setActionLoading(agentId);
+        try {
+            const res = await fetch(`/api/agents/${agentId}`, {
+                method: 'DELETE',
+            });
+
+            if (res.ok) {
+                await fetchAgents();
+            }
+        } catch (error) {
+            console.error('Failed to delete agent:', error);
+        } finally {
+            setActionLoading(null);
         }
     };
+
+    const getStatusColor = (status: string) => {
+        switch (status) {
+            case 'active':
+                return 'bg-green-500/10 text-green-500 border-green-500/20';
+            case 'paused':
+                return 'bg-gray-500/10 text-gray-400 border-gray-500/20';
+            case 'error':
+                return 'bg-red-500/10 text-red-500 border-red-500/20';
+            default:
+                return 'bg-gray-500/10 text-gray-400 border-gray-500/20';
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-screen bg-background">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                    <p className="text-muted-foreground">Loading agents...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+        <div className="min-h-screen bg-background p-8">
             {/* Header */}
-            <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                                🤖 AI Agents Dashboard
-                            </h1>
-                            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                                Automated agents running 24/7 to help you find jobs and opportunities
-                            </p>
-                        </div>
-                        <div className="flex items-center space-x-4">
-                            <button
-                                onClick={() => setNotificationsEnabled(!notificationsEnabled)}
-                                className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
-                                    notificationsEnabled
-                                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
-                                        : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-                                }`}
-                            >
-                                <Bell className="w-4 h-4 mr-2" />
-                                Notifications {notificationsEnabled ? 'On' : 'Off'}
-                            </button>
-                        </div>
+            <div className="max-w-7xl mx-auto mb-8">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h1 className="text-4xl font-bold text-foreground mb-2">
+                            🤖 AI Agents Dashboard
+                        </h1>
+                        <p className="text-muted-foreground">
+                            Manage and monitor your automated agents
+                        </p>
                     </div>
+                    <button
+                        onClick={() => setShowCreateModal(true)}
+                        className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-all"
+                    >
+                        <Plus size={20} />
+                        Create Agent
+                    </button>
                 </div>
             </div>
 
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                {/* Stats Overview */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm text-gray-500 dark:text-gray-400">Active Agents</p>
-                                <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
-                                    {agents.filter(a => a.status === 'active').length}
-                                </p>
-                            </div>
-                            <div className="bg-green-100 dark:bg-green-900 p-3 rounded-lg">
-                                <CheckCircle className="w-6 h-6 text-green-600 dark:text-green-400" />
-                            </div>
-                        </div>
+            {/* Stats */}
+            <div className="max-w-7xl mx-auto mb-8 grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="bg-card border border-border rounded-lg p-6">
+                    <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-sm font-medium text-muted-foreground">Total Agents</h3>
+                        <Activity className="text-primary" size={20} />
                     </div>
-
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm text-gray-500 dark:text-gray-400">Total Runs Today</p>
-                                <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
-                                    {agents.reduce((sum, a) => sum + Math.floor(a.totalRuns / 7), 0)}
-                                </p>
-                            </div>
-                            <div className="bg-blue-100 dark:bg-blue-900 p-3 rounded-lg">
-                                <TrendingUp className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm text-gray-500 dark:text-gray-400">Success Rate</p>
-                                <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
-                                    {Math.round(agents.reduce((sum, a) => sum + a.successRate, 0) / agents.length)}%
-                                </p>
-                            </div>
-                            <div className="bg-purple-100 dark:bg-purple-900 p-3 rounded-lg">
-                                <CheckCircle className="w-6 h-6 text-purple-600 dark:text-purple-400" />
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm text-gray-500 dark:text-gray-400">Next Run</p>
-                                <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
-                                    {formatNextRun(agents.find(a => a.nextRun)?.nextRun)}
-                                </p>
-                            </div>
-                            <div className="bg-orange-100 dark:bg-orange-900 p-3 rounded-lg">
-                                <Clock className="w-6 h-6 text-orange-600 dark:text-orange-400" />
-                            </div>
-                        </div>
-                    </div>
+                    <p className="text-3xl font-bold text-foreground">{agents.length}</p>
                 </div>
+                <div className="bg-card border border-border rounded-lg p-6">
+                    <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-sm font-medium text-muted-foreground">Active</h3>
+                        <CheckCircle2 className="text-green-500" size={20} />
+                    </div>
+                    <p className="text-3xl font-bold text-foreground">
+                        {agents.filter(a => a.status === 'active').length}
+                    </p>
+                </div>
+                <div className="bg-card border border-border rounded-lg p-6">
+                    <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-sm font-medium text-muted-foreground">Paused</h3>
+                        <Pause className="text-gray-400" size={20} />
+                    </div>
+                    <p className="text-3xl font-bold text-foreground">
+                        {agents.filter(a => a.status === 'paused').length}
+                    </p>
+                </div>
+                <div className="bg-card border border-border rounded-lg p-6">
+                    <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-sm font-medium text-muted-foreground">Errors</h3>
+                        <XCircle className="text-red-500" size={20} />
+                    </div>
+                    <p className="text-3xl font-bold text-foreground">
+                        {agents.filter(a => a.status === 'error').length}
+                    </p>
+                </div>
+            </div>
 
-                {/* Agents List */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {agents.map((agent) => (
-                        <div
-                            key={agent.id}
-                            className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow"
+            {/* Agents Grid */}
+            <div className="max-w-7xl mx-auto">
+                {agents.length === 0 ? (
+                    <div className="text-center py-16 bg-card border border-border rounded-lg">
+                        <p className="text-muted-foreground mb-4">No agents found</p>
+                        <button
+                            onClick={() => setShowCreateModal(true)}
+                            className="px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90"
                         >
-                            <div className="flex items-start justify-between mb-4">
-                                <div className="flex items-start space-x-3">
-                                    <span className="text-3xl">{agent.icon}</span>
-                                    <div>
-                                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                                            {agent.name}
-                                        </h3>
-                                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                                            {agent.description}
-                                        </p>
-                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300 mt-2">
-                                            {agent.category}
-                                        </span>
+                            Create Your First Agent
+                        </button>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {agents.map((agent) => (
+                            <div
+                                key={agent.id}
+                                className="bg-card border border-border rounded-lg p-6 hover:border-primary/50 transition-all cursor-pointer group"
+                                onClick={() => router.push(`/agents/${agent.agentId}`)}
+                            >
+                                {/* Header */}
+                                <div className="flex items-start justify-between mb-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="text-4xl">{agent.icon}</div>
+                                        <div>
+                                            <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">
+                                                {agent.name}
+                                            </h3>
+                                            <span className={`inline-block px-2 py-1 text-xs rounded-full border mt-1 ${getStatusColor(agent.status)}`}>
+                                                {agent.status.toUpperCase()}
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
-                                <span
-                                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                        agent.status === 'active'
-                                            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
-                                            : agent.status === 'running'
-                                            ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300'
-                                            : agent.status === 'paused'
-                                            ? 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                                            : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
-                                    }`}
-                                >
-                                    {agent.status}
-                                </span>
-                            </div>
 
-                            <div className="space-y-2 mb-4">
-                                <div className="flex items-center justify-between text-sm">
-                                    <span className="text-gray-500 dark:text-gray-400">Schedule:</span>
-                                    <span className="text-gray-900 dark:text-white font-medium">
-                                        {agent.schedule.includes('9,17') ? 'Twice daily (9 AM, 5 PM)' :
-                                         agent.schedule.includes('8,14,20') ? '3x daily (8 AM, 2 PM, 8 PM)' :
-                                         'Daily at 10 AM'}
+                                {/* Description */}
+                                <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
+                                    {agent.description}
+                                </p>
+
+                                {/* Schedule */}
+                                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4 bg-muted/50 px-3 py-2 rounded">
+                                    <Clock size={14} />
+                                    <span className="font-mono text-xs">{agent.schedule}</span>
+                                </div>
+
+                                {/* Category */}
+                                <div className="mb-4">
+                                    <span className="inline-block px-3 py-1 text-xs bg-primary/10 text-primary rounded-full">
+                                        {agent.category}
                                     </span>
                                 </div>
-                                <div className="flex items-center justify-between text-sm">
-                                    <span className="text-gray-500 dark:text-gray-400">Last Run:</span>
-                                    <span className="text-gray-900 dark:text-white">
-                                        {agent.lastRun ? new Date(agent.lastRun).toLocaleString() : 'Never'}
-                                    </span>
-                                </div>
-                                <div className="flex items-center justify-between text-sm">
-                                    <span className="text-gray-500 dark:text-gray-400">Next Run:</span>
-                                    <span className="text-gray-900 dark:text-white font-medium">
-                                        {formatNextRun(agent.nextRun)}
-                                    </span>
-                                </div>
-                                <div className="flex items-center justify-between text-sm">
-                                    <span className="text-gray-500 dark:text-gray-400">Success Rate:</span>
-                                    <span className="text-green-600 dark:text-green-400 font-semibold">
-                                        {agent.successRate}% ({agent.totalRuns} runs)
-                                    </span>
+
+                                {/* Actions */}
+                                <div className="flex items-center gap-2 pt-4 border-t border-border" onClick={(e) => e.stopPropagation()}>
+                                    <button
+                                        onClick={() => toggleAgentStatus(agent.agentId, agent.status)}
+                                        disabled={actionLoading === agent.agentId}
+                                        className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-all ${agent.status === 'active'
+                                            ? 'bg-gray-500/10 text-gray-400 hover:bg-gray-500/20'
+                                            : 'bg-green-500/10 text-green-500 hover:bg-green-500/20'
+                                            }`}
+                                    >
+                                        {agent.status === 'active' ? <Pause size={16} /> : <Play size={16} />}
+                                        {agent.status === 'active' ? 'Pause' : 'Start'}
+                                    </button>
+                                    <button
+                                        onClick={() => runAgentNow(agent.agentId)}
+                                        disabled={actionLoading === agent.agentId}
+                                        className="px-4 py-2 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                    >
+                                        {actionLoading === agent.agentId ? (
+                                            <>
+                                                <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                                                Running...
+                                            </>
+                                        ) : (
+                                            'Run Now'
+                                        )}
+                                    </button>
+                                    <button
+                                        onClick={() => router.push(`/agents/${agent.agentId}/settings`)}
+                                        className="p-2 bg-muted hover:bg-muted/80 text-muted-foreground rounded-lg transition-all"
+                                    >
+                                        <Settings size={16} />
+                                    </button>
+                                    <button
+                                        onClick={() => deleteAgent(agent.agentId)}
+                                        disabled={actionLoading === agent.agentId}
+                                        className="p-2 bg-destructive/10 text-destructive hover:bg-destructive/20 rounded-lg transition-all"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
                                 </div>
                             </div>
-
-                            <div className="flex items-center space-x-2">
-                                <button
-                                    onClick={() => handleToggleAgent(agent.id)}
-                                    className={`flex-1 flex items-center justify-center px-4 py-2 rounded-lg transition-colors ${
-                                        agent.status === 'active'
-                                            ? 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
-                                            : 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900 dark:text-green-300 dark:hover:bg-green-800'
-                                    }`}
-                                    disabled={agent.status === 'running'}
-                                >
-                                    {agent.status === 'active' ? (
-                                        <>
-                                            <Pause className="w-4 h-4 mr-2" />
-                                            Pause
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Play className="w-4 h-4 mr-2" />
-                                            Activate
-                                        </>
-                                    )}
-                                </button>
-                                <button
-                                    onClick={() => handleRunNow(agent.id)}
-                                    disabled={agent.status === 'running' || agent.status === 'paused'}
-                                    className="flex-1 flex items-center justify-center px-4 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed dark:disabled:bg-gray-700"
-                                >
-                                    <Play className="w-4 h-4 mr-2" />
-                                    {agent.status === 'running' ? 'Running...' : 'Run Now'}
-                                </button>
-                                <button
-                                    onClick={() => setSelectedAgent(agent)}
-                                    className="p-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
-                                >
-                                    <Settings className="w-4 h-4" />
-                                </button>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-
-                {/* Notification Setup Instructions */}
-                <div className="mt-8 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg p-6 border border-blue-200 dark:border-blue-800">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
-                        📬 Notification Integration
-                    </h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                        Get notified about agent runs, job opportunities, and important updates through your preferred channels.
-                    </p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                            <h4 className="font-medium text-gray-900 dark:text-white mb-2">💬 Slack Integration</h4>
-                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                                Set up Slack webhooks to receive real-time notifications about agent runs and opportunities.
-                            </p>
-                            <button className="text-sm text-blue-600 dark:text-blue-400 hover:underline">
-                                Configure Slack →
-                            </button>
-                        </div>
-                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                            <h4 className="font-medium text-gray-900 dark:text-white mb-2">📱 WhatsApp Integration</h4>
-                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                                Connect WhatsApp Business API to get instant updates on your mobile device.
-                            </p>
-                            <button className="text-sm text-blue-600 dark:text-blue-400 hover:underline">
-                                Configure WhatsApp →
-                            </button>
-                        </div>
+                        ))}
                     </div>
-                </div>
+                )}
             </div>
+
+            {/* Create Agent Modal */}
+            {showCreateModal && (
+                <CreateAgentModal
+                    onClose={() => setShowCreateModal(false)}
+                    onSuccess={() => {
+                        setShowCreateModal(false);
+                        fetchAgents();
+                    }}
+                />
+            )}
         </div>
     );
 }
 
+function CreateAgentModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+    const [formData, setFormData] = useState({
+        agentId: '',
+        name: '',
+        description: '',
+        icon: '🤖',
+        category: 'Custom',
+        schedule: '0 9 * * *',
+        tools: [] as string[],
+        prompt: '',
+    });
+    const [loading, setLoading] = useState(false);
+
+    const availableTools = [
+        { id: 'jobSearch', name: 'Job Search', description: 'Search for jobs with AI matching' },
+        { id: 'websearch', name: 'Web Search', description: 'Search the web using Tavily' },
+        { id: 'twitter', name: 'Twitter', description: 'Post tweets and interact with Twitter' },
+        { id: 'github', name: 'GitHub', description: 'Search repositories and pull requests' },
+    ];
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoading(true);
+
+        try {
+            const res = await fetch('/api/agents', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ...formData,
+                    envVars: {
+                        tools: formData.tools,
+                        prompt: formData.prompt,
+                    },
+                }),
+            });
+
+            if (res.ok) {
+                onSuccess();
+            } else {
+                alert('Failed to create agent');
+            }
+        } catch (error) {
+            console.error('Failed to create agent:', error);
+            alert('Failed to create agent');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={onClose}>
+            <div className="bg-card border border-border rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                <div className="p-6 border-b border-border">
+                    <h2 className="text-2xl font-bold text-foreground">Create New Agent</h2>
+                    <p className="text-muted-foreground mt-1">Configure your custom AI agent</p>
+                </div>
+
+                <form onSubmit={handleSubmit} className="p-6 space-y-6">
+                    {/* Agent ID */}
+                    <div>
+                        <label className="block text-sm font-medium text-foreground mb-2">
+                            Agent ID <span className="text-destructive">*</span>
+                        </label>
+                        <input
+                            type="text"
+                            required
+                            value={formData.agentId}
+                            onChange={(e) => setFormData({ ...formData, agentId: e.target.value })}
+                            placeholder="my-custom-agent"
+                            className="w-full px-4 py-2 bg-background border border-input rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                        />
+                    </div>
+
+                    {/* Name */}
+                    <div>
+                        <label className="block text-sm font-medium text-foreground mb-2">
+                            Agent Name <span className="text-destructive">*</span>
+                        </label>
+                        <input
+                            type="text"
+                            required
+                            value={formData.name}
+                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                            placeholder="My Custom Agent"
+                            className="w-full px-4 py-2 bg-background border border-input rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                        />
+                    </div>
+
+                    {/* Icon & Category */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-foreground mb-2">Icon</label>
+                            <input
+                                type="text"
+                                value={formData.icon}
+                                onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
+                                placeholder="🤖"
+                                className="w-full px-4 py-2 bg-background border border-input rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-foreground mb-2">Category</label>
+                            <input
+                                type="text"
+                                value={formData.category}
+                                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                                placeholder="Custom"
+                                className="w-full px-4 py-2 bg-background border border-input rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Description */}
+                    <div>
+                        <label className="block text-sm font-medium text-foreground mb-2">
+                            Description <span className="text-destructive">*</span>
+                        </label>
+                        <textarea
+                            required
+                            value={formData.description}
+                            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                            placeholder="What does this agent do?"
+                            rows={3}
+                            className="w-full px-4 py-2 bg-background border border-input rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                        />
+                    </div>
+
+                    {/* Schedule */}
+                    <div>
+                        <label className="block text-sm font-medium text-foreground mb-2">
+                            Cron Schedule <span className="text-destructive">*</span>
+                        </label>
+                        <input
+                            type="text"
+                            required
+                            value={formData.schedule}
+                            onChange={(e) => setFormData({ ...formData, schedule: e.target.value })}
+                            placeholder="0 9 * * * (Every day at 9 AM)"
+                            className="w-full px-4 py-2 bg-background border border-input rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-ring font-mono"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                            Use cron format: minute hour day month weekday
+                        </p>
+                    </div>
+
+                    {/* Tools */}
+                    <div>
+                        <label className="block text-sm font-medium text-foreground mb-2">
+                            Tools
+                        </label>
+                        <div className="grid grid-cols-2 gap-3">
+                            {availableTools.map((tool) => (
+                                <label
+                                    key={tool.id}
+                                    className={`flex items-start gap-3 p-3 border rounded-lg cursor-pointer transition-all ${formData.tools.includes(tool.id)
+                                        ? 'border-primary bg-primary/10'
+                                        : 'border-border bg-background hover:border-primary/50'
+                                        }`}
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={formData.tools.includes(tool.id)}
+                                        onChange={(e) => {
+                                            if (e.target.checked) {
+                                                setFormData({ ...formData, tools: [...formData.tools, tool.id] });
+                                            } else {
+                                                setFormData({ ...formData, tools: formData.tools.filter(t => t !== tool.id) });
+                                            }
+                                        }}
+                                        className="mt-1"
+                                    />
+                                    <div>
+                                        <div className="font-medium text-foreground text-sm">{tool.name}</div>
+                                        <div className="text-xs text-muted-foreground">{tool.description}</div>
+                                    </div>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Prompt */}
+                    <div>
+                        <label className="block text-sm font-medium text-foreground mb-2">
+                            Agent Prompt <span className="text-destructive">*</span>
+                        </label>
+                        <textarea
+                            required
+                            value={formData.prompt}
+                            onChange={(e) => setFormData({ ...formData, prompt: e.target.value })}
+                            placeholder="What should this agent do when it runs?"
+                            rows={5}
+                            className="w-full px-4 py-2 bg-background border border-input rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                        />
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex gap-3 pt-4 border-t border-border">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="flex-1 px-6 py-2 border border-border rounded-lg text-foreground hover:bg-muted transition-all"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="flex-1 px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-all disabled:opacity-50"
+                        >
+                            {loading ? 'Creating...' : 'Create Agent'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+}
