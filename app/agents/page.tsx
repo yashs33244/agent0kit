@@ -254,9 +254,16 @@ export default function AgentsPage() {
                                     <button
                                         onClick={() => runAgentNow(agent.agentId)}
                                         disabled={actionLoading === agent.agentId}
-                                        className="px-4 py-2 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-all"
+                                        className="px-4 py-2 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                                     >
-                                        Run Now
+                                        {actionLoading === agent.agentId ? (
+                                            <>
+                                                <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                                                Running...
+                                            </>
+                                        ) : (
+                                            'Run Now'
+                                        )}
                                     </button>
                                     <button
                                         onClick={() => router.push(`/agents/${agent.agentId}/settings`)}

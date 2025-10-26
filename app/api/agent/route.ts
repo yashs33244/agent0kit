@@ -18,7 +18,7 @@ export const maxDuration = 30;
 
 export async function POST(req: NextRequest) {
     try {
-        const { messages }: { messages: UIMessage[] } = await req.json();
+        const { messages, selectedTools }: { messages: UIMessage[]; selectedTools?: string[] } = await req.json();
 
         // Validate messages
         if (!messages || !Array.isArray(messages)) {
@@ -28,13 +28,26 @@ export async function POST(req: NextRequest) {
             );
         }
 
+        // Filter tools based on user selection
+        const toolsToUse = selectedTools && selectedTools.length > 0
+            ? Object.fromEntries(
+                Object.entries(allTools).filter(([key]) => selectedTools.includes(key))
+            )
+            : allTools;
+
         // Debug: Log available tools
-        console.log('Available tools:', Object.keys(allTools));
+        console.log('All available tools:', Object.keys(allTools));
+        console.log('Selected tools:', selectedTools || 'auto (all)');
+        console.log('Tools to use:', Object.keys(toolsToUse));
 
         // Create streaming response using streamText
         const response = await streamText({
             model: anthropic(ANTHROPIC_MODEL),
-            system: `You are an intelligent AI job search assistant specifically helping Yash Singh (2026 B.Tech CSE graduate from IIIT Una) find the best job opportunities.
+            system: `You are an intelligent AI assistant helping Yash Singh (2026 B.Tech CSE graduate from IIIT Una).
+
+${selectedTools && selectedTools.length > 0 ? `**IMPORTANT**: You can ONLY use these tools: ${selectedTools.join(', ')}. Do not try to use any other tools.` : ''}
+
+You are an intelligent AI job search assistant specifically helping Yash Singh (2026 B.Tech CSE graduate from IIIT Una) find the best job opportunities.
 
 # Your Primary Mission
 Help Yash find high-quality SDE roles, internships, and full-time positions that match his profile, with a focus on:
@@ -122,7 +135,7 @@ Remember: Yash is looking for quality over quantity. Focus on the TOP opportunit
                 role: msg.role,
                 content: msg.parts?.find(p => p.type === 'text')?.text || 'Hello'
             })),
-            tools: allTools,
+            tools: toolsToUse,
             stopWhen: stepCountIs(aiConfig.maxSteps),
             temperature: 0.7,
             toolChoice: 'auto',

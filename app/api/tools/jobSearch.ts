@@ -386,6 +386,34 @@ export const jobSearchTool = tool({
             console.log(`   Medium match: ${mediumMatchJobs.length}`);
             console.log(`   Average score: ${avgScore}/100`);
 
+            // Send Telegram notifications with CSV
+            if (jobs.length > 0) {
+                console.log('📱 Sending Telegram notification with CSV...');
+                const { notifyJobOpportunities } = await import('@/lib/telegram');
+
+                // Send all jobs that have 60+ match score
+                const allQualifyingJobs = [...highMatchJobs, ...mediumMatchJobs];
+
+                if (allQualifyingJobs.length > 0) {
+                    await notifyJobOpportunities(
+                        allQualifyingJobs.map(job => ({
+                            title: job.title,
+                            company: job.company,
+                            location: job.location,
+                            salary: job.salary,
+                            matchScore: job.matchScore,
+                            matchedSkills: job.matchedSkills,
+                            url: job.url,
+                            relevanceFactors: job.relevanceFactors || [],
+                        })),
+                        csvData
+                    );
+                    console.log('✅ Telegram notification sent with CSV file');
+                } else {
+                    console.log('⚠️ No qualifying jobs (60+ match) to notify about');
+                }
+            }
+
             return result;
         } catch (error) {
             console.error('❌ Job search error:', error);

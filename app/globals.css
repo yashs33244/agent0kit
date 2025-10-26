@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -117,5 +118,148 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+/* Professional Markdown Styling for Agent Responses */
+@layer components {
+  /* Streamdown / Response component markdown styling */
+  [class*="Streamdown"],
+  .markdown-content {
+    @apply text-base leading-relaxed;
+  }
+
+  /* Headings with proper hierarchy */
+  [class*="Streamdown"] h1,
+  .markdown-content h1 {
+    @apply text-3xl font-bold mt-8 mb-4 text-foreground border-b border-border pb-2;
+  }
+
+  [class*="Streamdown"] h2,
+  .markdown-content h2 {
+    @apply text-2xl font-bold mt-6 mb-3 text-foreground;
+  }
+
+  [class*="Streamdown"] h3,
+  .markdown-content h3 {
+    @apply text-xl font-semibold mt-5 mb-2 text-foreground;
+  }
+
+  [class*="Streamdown"] h4,
+  .markdown-content h4 {
+    @apply text-lg font-semibold mt-4 mb-2 text-foreground;
+  }
+
+  [class*="Streamdown"] h5,
+  .markdown-content h5 {
+    @apply text-base font-semibold mt-3 mb-2 text-foreground;
+  }
+
+  [class*="Streamdown"] h6,
+  .markdown-content h6 {
+    @apply text-sm font-semibold mt-3 mb-2 text-muted-foreground;
+  }
+
+  /* Paragraphs with proper spacing */
+  [class*="Streamdown"] p,
+  .markdown-content p {
+    @apply my-4 leading-7 text-foreground;
+  }
+
+  /* Lists with proper indentation and spacing */
+  [class*="Streamdown"] ul,
+  .markdown-content ul {
+    @apply my-4 ml-6 list-disc space-y-2;
+  }
+
+  [class*="Streamdown"] ol,
+  .markdown-content ol {
+    @apply my-4 ml-6 list-decimal space-y-2;
+  }
+
+  [class*="Streamdown"] li,
+  .markdown-content li {
+    @apply leading-7 text-foreground;
+  }
+
+  /* Nested lists */
+  [class*="Streamdown"] li > ul,
+  [class*="Streamdown"] li > ol,
+  .markdown-content li > ul,
+  .markdown-content li > ol {
+    @apply my-2;
+  }
+
+  /* Blockquotes */
+  [class*="Streamdown"] blockquote,
+  .markdown-content blockquote {
+    @apply my-4 pl-4 border-l-4 border-primary/30 bg-muted/50 py-2 pr-4 italic text-muted-foreground;
+  }
+
+  /* Code blocks */
+  [class*="Streamdown"] pre,
+  .markdown-content pre {
+    @apply my-4 p-4 bg-muted rounded-lg overflow-x-auto border border-border;
+  }
+
+  [class*="Streamdown"] code,
+  .markdown-content code {
+    @apply font-mono text-sm bg-muted px-1.5 py-0.5 rounded;
+  }
+
+  [class*="Streamdown"] pre code,
+  .markdown-content pre code {
+    @apply bg-transparent p-0;
+  }
+
+  /* Tables */
+  [class*="Streamdown"] table,
+  .markdown-content table {
+    @apply my-4 w-full border-collapse;
+  }
+
+  [class*="Streamdown"] th,
+  .markdown-content th {
+    @apply border border-border bg-muted px-4 py-2 text-left font-semibold;
+  }
+
+  [class*="Streamdown"] td,
+  .markdown-content td {
+    @apply border border-border px-4 py-2;
+  }
+
+  /* Horizontal rules */
+  [class*="Streamdown"] hr,
+  .markdown-content hr {
+    @apply my-6 border-t border-border;
+  }
+
+  /* Links */
+  [class*="Streamdown"] a,
+  .markdown-content a {
+    @apply text-primary underline hover:text-primary/80 transition-colors;
+  }
+
+  /* Strong and emphasis */
+  [class*="Streamdown"] strong,
+  .markdown-content strong {
+    @apply font-bold text-foreground;
+  }
+
+  [class*="Streamdown"] em,
+  .markdown-content em {
+    @apply italic;
+  }
+
+  /* Task lists */
+  [class*="Streamdown"] input[type="checkbox"],
+  .markdown-content input[type="checkbox"] {
+    @apply mr-2;
+  }
+
+  /* Images */
+  [class*="Streamdown"] img,
+  .markdown-content img {
+    @apply my-4 rounded-lg max-w-full h-auto;
   }
 }

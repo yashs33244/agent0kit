@@ -87,6 +87,13 @@ export async function sendTelegramDocument(
     document: { filename: string; content: string },
     caption?: string
 ): Promise<{ success: boolean; error?: string }> {
+    const fs = await import('fs/promises');
+    const path = await import('path');
+    const { default: FormData } = await import('form-data');
+    const { default: nodeFetch } = await import('node-fetch');
+
+    let tempFilePath: string | null = null;
+
     try {
         const botToken = getBotToken(agentType);
         const chatId = process.env.TELEGRAM_CHAT_ID;
@@ -96,52 +103,53 @@ export async function sendTelegramDocument(
             return { success: false, error: 'Not configured' };
         }
 
+        // Create temp directory
+        const tmpDir = path.join(process.cwd(), 'tmp');
+        await fs.mkdir(tmpDir, { recursive: true });
+
+        // Save CSV to temp file
+        tempFilePath = path.join(tmpDir, document.filename);
+        await fs.writeFile(tempFilePath, document.content, 'utf-8');
+        console.log(`💾 Saved temp CSV: ${tempFilePath}`);
+
         const url = `https://api.telegram.org/bot${botToken}/sendDocument`;
 
-        // Create multipart form data manually
-        const boundary = `----WebKitFormBoundary${Math.random().toString(36).substring(2)}`;
-
-        const parts: string[] = [];
-
-        // Add chat_id
-        parts.push(`--${boundary}`);
-        parts.push('Content-Disposition: form-data; name="chat_id"');
-        parts.push('');
-        parts.push(chatId);
-
-        // Add document
-        parts.push(`--${boundary}`);
-        parts.push(`Content-Disposition: form-data; name="document"; filename="${document.filename}"`);
-        parts.push('Content-Type: text/csv');
-        parts.push('');
-        parts.push(document.content);
-
-        // Add caption if provided
-        if (caption) {
-            parts.push(`--${boundary}`);
-            parts.push('Content-Disposition: form-data; name="caption"');
-            parts.push('');
-            parts.push(caption);
-
-            parts.push(`--${boundary}`);
-            parts.push('Content-Disposition: form-data; name="parse_mode"');
-            parts.push('');
-            parts.push('HTML');
-        }
-
-        parts.push(`--${boundary}--`);
-
-        const body = parts.join('\r\n');
-
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': `multipart/form-data; boundary=${boundary}`,
-            },
-            body,
+        // Create proper form-data with file stream
+        const formData = new FormData();
+        formData.append('chat_id', chatId);
+        formData.append('document', await fs.readFile(tempFilePath), {
+            filename: document.filename,
+            contentType: 'text/csv',
         });
 
-        const data = await response.json();
+        if (caption) {
+            formData.append('caption', caption);
+            formData.append('parse_mode', 'HTML');
+        }
+
+        console.log(`📤 Uploading ${document.filename} to Telegram...`);
+
+        // Use node-fetch with form-data
+        const response = await nodeFetch(url, {
+            method: 'POST',
+            body: formData,
+            headers: formData.getHeaders(),
+        });
+
+        console.log(`📡 Telegram response status: ${response.status} ${response.statusText}`);
+
+        const responseText = await response.text();
+
+        let data;
+        try {
+            data = JSON.parse(responseText);
+        } catch (error) {
+            console.error('❌ Failed to parse Telegram response:', responseText.substring(0, 500));
+            return {
+                success: false,
+                error: `Invalid response from Telegram: ${responseText.substring(0, 100)}`
+            };
+        }
 
         if (!response.ok || !data.ok) {
             console.error('❌ Telegram document send error:', data);
@@ -156,6 +164,17 @@ export async function sendTelegramDocument(
             success: false,
             error: error instanceof Error ? error.message : 'Unknown error'
         };
+    } finally {
+        // Clean up temporary file
+        if (tempFilePath) {
+            try {
+                const fs = await import('fs/promises');
+                await fs.unlink(tempFilePath);
+                console.log(`🗑️ Deleted temp CSV: ${tempFilePath}`);
+            } catch (cleanupError) {
+                console.error('⚠️ Failed to delete temp CSV:', cleanupError);
+            }
+        }
     }
 }
 
@@ -163,7 +182,13 @@ export async function notifyJobOpportunities(
     jobs: JobNotification[],
     csvData?: string
 ): Promise<void> {
-    if (jobs.length === 0) return;
+    console.log(`📱 Sending Telegram notification for ${jobs.length} jobs...`);
+    console.log(`📄 CSV Data available: ${csvData ? 'YES' : 'NO'}${csvData ? ` (${csvData.length} bytes)` : ''}`);
+
+    if (jobs.length === 0) {
+        console.log('⚠️ No jobs to notify about, skipping Telegram notification');
+        return;
+    }
 
     const highMatchJobs = jobs.filter(j => j.matchScore >= 80);
     const goodMatchJobs = jobs.filter(j => j.matchScore >= 60 && j.matchScore < 80);
@@ -206,16 +231,19 @@ export async function notifyJobOpportunities(
     message += `\n📈 <i>Keep applying! Your next opportunity is waiting.</i>`;
 
     // Send text message
-    await sendTelegramMessage('job', {
+    console.log('📤 Sending text message to Telegram...');
+    const textResult = await sendTelegramMessage('job', {
         text: message,
         parse_mode: 'HTML',
         disable_web_page_preview: true,
     });
+    console.log(`✅ Text message sent: ${textResult.success ? 'SUCCESS' : 'FAILED'}`);
 
     // Send CSV file if available
     if (csvData) {
+        console.log('📤 Sending CSV file to Telegram...');
         const timestamp = new Date().toISOString().split('T')[0];
-        await sendTelegramDocument(
+        const csvResult = await sendTelegramDocument(
             'job',
             {
                 filename: `jobs_${timestamp}.csv`,
@@ -223,6 +251,9 @@ export async function notifyJobOpportunities(
             },
             `📊 Complete job search results (${jobs.length} jobs)`
         );
+        console.log(`✅ CSV file sent: ${csvResult.success ? 'SUCCESS' : 'FAILED'}${csvResult.error ? ` - ${csvResult.error}` : ''}`);
+    } else {
+        console.log('⚠️ No CSV data to send');
     }
 }
 

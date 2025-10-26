@@ -346,7 +346,7 @@ export default function ChatDetailPage({ params }: { params: Promise<{ id: strin
                             placeholder="Continue the conversation..."
                             disabled={status !== 'ready'}
                         />
-                        <PromptInputSubmit disabled={status !== 'ready' || !input.trim()} />
+                        <PromptInputSubmit className='m-4' disabled={status !== 'ready' || !input.trim()} />
                     </PromptInput>
                     <p className="text-xs text-muted-foreground mt-2 text-center">
                         💾 Your messages are automatically saved to this conversation

@@ -26,14 +26,31 @@ async function main() {
         {
             agentId: 'twitter-tech-poster',
             name: '🐦 Twitter Tech Poster',
-            description: 'Posts tweets about latest tech trends, coding tips, and DevOps insights automatically.',
+            description: 'Posts tweets about tech trends, coding tips, and AI insights. Optimized for Twitter v2 API free tier (500 posts/month).',
             icon: '🐦',
             category: 'Social Media',
             status: 'paused',
-            schedule: process.env.CRON_TWITTER || '0 8,14,20 * * *',
+            // 500 posts/month = ~16 posts/day. Schedule: Every 90 minutes (16 times/day)
+            schedule: process.env.CRON_TWITTER || '0 */90 * * *',
             envVars: {
                 telegramBotToken: 'TELEGRAM_TWITTER_AGENT_BOT_TOKEN',
                 tools: ['twitter', 'websearch'],
+                postsPerMonth: 500,
+                note: 'Twitter v2 API free tier - 500 posts/month limit',
+            },
+        },
+        {
+            agentId: 'tech-news-research',
+            name: '📰 AI & Tech News Intelligence',
+            description: 'Deep tech research covering OpenAI, Anthropic, Gemini, Meta AI, NVIDIA, Apple Research, Spotify. Includes AI agents, tools, coding resources, and job market insights.',
+            icon: '🔬',
+            category: 'Research',
+            status: 'paused',
+            schedule: process.env.CRON_TECH_NEWS || '0 7,19 * * *', // Twice daily
+            envVars: {
+                telegramBotToken: 'TELEGRAM_NEWS_AGENT_BOT_TOKEN',
+                tools: ['websearch'],
+                topics: ['AI agents', 'OpenAI updates', 'Anthropic Claude', 'Google Gemini', 'Meta AI', 'NVIDIA AI', 'Apple Research', 'Spotify tech', 'coding tools', 'job market', 'agent frameworks'],
             },
         },
         {
@@ -51,15 +68,30 @@ async function main() {
         },
         {
             agentId: 'web-research',
-            name: '📰 Tech News Aggregator',
-            description: 'Searches for latest tech news and compiles a daily digest of important updates.',
-            icon: '📰',
+            name: '📡 General Web Research',
+            description: 'Performs general web research on any topic you specify. Useful for quick information gathering and fact-checking.',
+            icon: '🔍',
             category: 'Research',
             status: 'paused',
-            schedule: process.env.CRON_WEB_RESEARCH || '0 7 * * *',
+            schedule: process.env.CRON_WEB_RESEARCH || '0 */6 * * *', // Every 6 hours
             envVars: {
                 telegramBotToken: 'TELEGRAM_WEB_AGENT_BOT_TOKEN',
                 tools: ['websearch'],
+            },
+        },
+        {
+            agentId: 'binocs-sales-agent',
+            name: '💼 Binocs.co Sales Intelligence',
+            description: 'AI sales agent for Binocs.co - finds ideal clients for CDD, investment reports, and memos. Uses parallel searches (Claude, Tavily, OpenAI) + Lusha for contact enrichment.',
+            icon: '🎯',
+            category: 'Sales',
+            status: 'paused',
+            schedule: process.env.CRON_SALES || '0 9 * * 1,3,5', // Mon, Wed, Fri at 9 AM
+            envVars: {
+                telegramBotToken: 'TELEGRAM_SALES_AGENT_BOT_TOKEN',
+                tools: ['websearch', 'lusha'],
+                targetMarket: 'Private equity firms, venture capital, family offices, private companies seeking due diligence and investment intelligence',
+                productOffering: 'CDD reports, investment memos, due diligence reports, market intelligence',
             },
         },
     ];
